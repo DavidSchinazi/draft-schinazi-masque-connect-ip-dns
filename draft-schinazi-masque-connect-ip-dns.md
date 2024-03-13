@@ -8,10 +8,10 @@ number:
 date:
 consensus: true
 v: 3
-area: Transport
+area: "Web and Internet Transport"
 wg: MASQUE
 venue:
-  group: "MASQUE"
+  group: "Multiplexed Application Substrate over QUIC Encryption"
   type: "Working Group"
   mail: "masque@ietf.org"
   arch: "https://mailarchive.ietf.org/arch/browse/masque/"
