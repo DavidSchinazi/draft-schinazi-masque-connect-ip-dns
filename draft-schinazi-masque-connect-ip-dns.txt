@@ -4,21 +4,21 @@
 
 MASQUE                                                       D. Schinazi
 Internet-Draft                                                Google LLC
-Intended status: Standards Track                           19 March 2024
-Expires: 20 September 2024
+Intended status: Standards Track                             6 July 2024
+Expires: 7 January 2025
 
 
-                 DNS Extensions for Proxying IP in HTTP
+               DNS Configuration for Proxying IP in HTTP
               draft-schinazi-masque-connect-ip-dns-latest
 
 Abstract
 
    Proxying IP in HTTP allows building a VPN through HTTP load
    balancers.  However, at the time of writing, that mechanism doesn't
-   offer a mechanism for communicating DNS information inline.  In
-   contrast, most existing VPN protocols provide a mechanism to exchange
-   DNS configuration information.  This document describes an extension
-   that exchanges this information using HTTP capsules.
+   offer a mechanism for communicating DNS configuration information
+   inline.  In contrast, most existing VPN protocols provide a mechanism
+   to exchange DNS configuration information.  This document describes
+   an extension that exchanges this information using HTTP capsules.
 
 About This Document
 
@@ -55,7 +55,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 20 September 2024.
+   This Internet-Draft will expire on 7 January 2025.
 
 Copyright Notice
 
@@ -79,11 +79,14 @@ Table of Contents
      2.1.  DNS_REQUEST Capsule
      2.2.  DNS_ASSIGN Capsule
    3.  Handling
-   4.  Security Considerations
-   5.  IANA Considerations
-   6.  References
-     6.1.  Normative References
-     6.2.  Informative References
+   4.  Examples
+     4.1.  Full-Tunnel Consumer VPN
+     4.2.  Split-Tunnel Enterprise VPN
+   5.  Security Considerations
+   6.  IANA Considerations
+   7.  References
+     7.1.  Normative References
+     7.2.  Informative References
    Acknowledgments
    Author's Address
 
@@ -91,11 +94,13 @@ Table of Contents
 
    Proxying IP in HTTP ([CONNECT-IP]) allows building a VPN through HTTP
    load balancers.  However, at the time of writing, that mechanism
-   doesn't offer a mechanism for communicating DNS information inline.
-   In contrast, most existing VPN protocols provide a mechanism to
-   exchange DNS configuration information (e.g., [IKEv2]).  This
-   document describes an extension that exchanges this information using
-   HTTP capsules ([HTTP-DGRAM]).
+   doesn't offer a mechanism for communicating DNS configuration
+   information inline.  In contrast, most existing VPN protocols provide
+   a mechanism to exchange DNS configuration information (e.g.,
+   [IKEv2]).  This document describes an extension that exchanges this
+   information using HTTP capsules ([HTTP-DGRAM]).  This document does
+   not define any new ways to convey DNS queries or responses, only a
+   mechanism to exchange DNS configuration information.
 
 1.1.  Conventions and Definitions
 
@@ -105,32 +110,69 @@ Table of Contents
    BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
    capitals, as shown here.
 
+   This document uses terminology from [QUIC].  Where this document
+   defines protocol types, the definition format uses the notation from
+   Section 1.3 of [QUIC].  This specification uses the variable-length
+   integer encoding from Section 16 of [QUIC].  Variable-length integer
+   values do not need to be encoded in the minimum number of bytes
+   necessary.
+
 2.  Mechanism
 
-   Similar to how Proxying IP in HTTP exchanges IP addresses
-   (Section 4.7 of [CONNECT-IP]), this mechanism leverages capsules to
-   request configuration and to assign it.  Similarly, this mechanism is
-   bidirectional: either endpoint can request DNS configuration by
-   sending a DNS_REQUEST capsule, and either endpoint can send DNS
-   configuration in a DNS_ASSIGN capsule.  These capsules follow the
-   format defined below.
+   Similar to how Proxying IP in HTTP exchanges IP address configuration
+   information (Section 4.7 of [CONNECT-IP]), this mechanism leverages
+   capsules to request DNS configuration information and to assign it.
+   Similarly, this mechanism is bidirectional: either endpoint can
+   request DNS configuration information by sending a DNS_REQUEST
+   capsule, and either endpoint can send DNS configuration information
+   in a DNS_ASSIGN capsule.  These capsules follow the format defined
+   below.
 
-   Nameserver Address {
-     IP Version (8),
-     IP Address (32..128),
+   Nameserver {
+     Type (i),
+     Length (i),
+     Value (...),
    }
 
-                    Figure 1: Nameserver Address Format
+                        Figure 1: Nameserver Format
 
-   Each Nameserver Address contains the following fields:
+   Each Nameserver structure contains the following fields:
 
-   IP Version:  IP Version of this nameserver address, encoded as an
-      unsigned 8-bit integer.  It MUST be either 4 or 6.
+   Type:  An integer representing the protocol over which DNS queries
+      and responses are sent.  See below for possible values.  Encoded
+      as a variable-length integer.
 
-   IP Address:  DNS nameserver IP address.  If the IP Version field has
-      value 4, the IP Address field SHALL have a length of 32 bits.  If
-      the IP Version field has value 6, the IP Address field SHALL have
-      a length of 128 bits.
+   Length:  The length of the following Value field, encoded as a
+      variable-length integer.
+
+   Value:  DNS name server configuration value, depends on the Type.
+      This is commonly an IP address, but for other protocols it can
+      also represent a URI template or a hostname.
+
+   This document defines the following types:
+
+   *  DNS over port 53.  Type = 0.  DNS is sent unencrypted over UDP or
+      TCP port 53, as per [DNS].  The Value is an IP address (either
+      IPv4 or IPv6) encoded in network byte order.  Length SHALL be
+      either 32 or 128 bits.
+
+   *  DNS over TLS.  Type = 1.  DNS is sent over TLS, as per [DoT].  The
+      Value is a hostname, optionally followed by a colon and a port.
+      The encoding is the same as an authority without userinfo as
+      defined in Section 3.2 of [URI].  It is encoded as ASCII, and not
+      null-terminated.  IPv4 and IPv6 addresses can be encoded using
+      this format, though IPv6 addresses need to be enclosed in square
+      brackets.
+
+   *  DNS over QUIC.  Type = 2.  DNS is sent over QUIC, as per [DoQ].
+      The Value is a hostname, encoded the same as for DNS over TLS.
+
+   *  DNS over HTTPS.  Type = 3.  DNS is sent over HTTPS, as per [DoH].
+      The Value is a URI Template.  It is encoded as ASCII, and not
+      null-terminated.
+
+   *  TODO: properly define an IANA registry with GREASE for future
+      types.
 
    Domain {
      Domain Length (i),
@@ -150,8 +192,8 @@ Table of Contents
 
    DNS Configuration {
      Request ID (i),
-     Nameserver Address Count (i),
-     Nameserver Address (..) ...,
+     Nameserver Count (i),
+     Nameserver (..) ...,
      Internal Domain Count (i),
      Internal Domain (..) ...,
      Search Domain Count (i),
@@ -171,13 +213,12 @@ Table of Contents
       in the request.  If this DNS configuration is part of an
       unsolicited assignment, this field SHALL be zero.
 
-   Nameserver Address Count:
-      The number of Nameserver Address structures following this field.
-      Encoded as a variable-length integer.
+   Nameserver Count:
+      The number of Nameserver structures following this field.  Encoded
+      as a variable-length integer.
 
-   Nameserver Address:
-      A series of Nameserver Address structures representing DNS name
-      servers.
+   Nameserver:
+      A series of Nameserver structures representing DNS name servers.
 
    Internal Domain Count:
       The number of Domain structures following this field.  Encoded as
@@ -195,12 +236,12 @@ Table of Contents
 
 2.1.  DNS_REQUEST Capsule
 
-   The DNS_REQUEST capsule (see Section 5 for the value of the capsule
+   The DNS_REQUEST capsule (see Section 6 for the value of the capsule
    type) allows an endpoint to request DNS configuration from its peer.
    The capsule allows the endpoint to optionally indicate a preference
    for which DNS configuration it would get assigned.  The sender can
-   indicate that it has no preference by not sending any addresses or
-   names in its request DNS Configuration.
+   indicate that it has no preference by not sending any name servers or
+   domain names in its request DNS Configuration.
 
    DNS_REQUEST Capsule {
      Type (i) = DNS_REQUEST,
@@ -212,7 +253,9 @@ Table of Contents
 
    When sending a DNS_REQUEST capsule, the sender MUST generate and send
    a new non-zero request ID that was not previously used on this IP
-   Proxying stream.
+   Proxying stream.  Note that this request ID namespace is distinct
+   from the one used by ADDRESS_ASSIGN capsules (see Section 4.7.1 of
+   [CONNECT-IP]).
 
    An endpoint that receives a DNS_REQUEST capsule SHALL reply by
    sending a DNS_ASSIGN capsule with the corresponding request ID.  That
@@ -221,7 +264,7 @@ Table of Contents
 
 2.2.  DNS_ASSIGN Capsule
 
-   The DNS_ASSIGN capsule (see Section 5 for the value of the capsule
+   The DNS_ASSIGN capsule (see Section 6 for the value of the capsule
    type) allows an endpoint to send DNS configuration to its peer.
 
    DNS_ASSIGN Capsule {
@@ -242,15 +285,65 @@ Table of Contents
    Note that internal domains include subdomains.  In other words, if
    the DNS configuration contains a domain, that indicates that the
    corresponding domain and all of its subdomains can be resolved by the
-   nameservers exchanged in the same DNS configuration.
+   name servers exchanged in the same DNS configuration.  Sending an
+   empty string as an internal domain indicates the DNS root; i.e., that
+   the corresponding name server can resolve all domain names.
 
-   As with other IP Proxying capsules, the receiver can decide to
-   whether to use or ignore the configuration information.  For example,
-   in the consumer VPN scenario, clients will trust the server and apply
+   As with other IP Proxying capsules, the receiver can decide whether
+   to use or ignore the configuration information.  For example, in the
+   consumer VPN scenario, clients will trust the server and apply
    received DNS configuration, whereas servers will ignore any DNS
    configuration sent by the client.
 
-4.  Security Considerations
+   If the IP proxy sends a DNS_ASSIGN capsule containing a DNS over
+   HTTPS name server, then the client can validate whether the IP proxy
+   is authoritative for the hostname in the URI template.  If this
+   validation succeeds, the client SHOULD send its DNS queries to that
+   name server directly as independent HTTPS requests over the same
+   HTTPS connection.
+
+4.  Examples
+
+4.1.  Full-Tunnel Consumer VPN
+
+   A full-tunnel consumer VPN hosted at masque.example could configure
+   the client to use DNS over HTTPS to the IP proxy itself by sending
+   the following configuration.
+
+   DNS Configuration = {
+     Nameservers = [{
+       Type = 3,  // DNS over HTTPS
+       Value = "https://masque.example/dns-query{?dns}",
+     }],
+     Internal Domains = [""],
+     Search Domains = [],
+   }
+
+                       Figure 6: Full Tunnel Example
+
+4.2.  Split-Tunnel Enterprise VPN
+
+   An enterprise switching their preexisting IPsec split-tunnel VPN
+   could use the following configuration.
+
+   DNS Configuration = {
+     Nameservers = [{
+       Type = 0,  // DNS over 53
+       Value = 2001:db8::1,
+     }, {
+       Type = 0,  // DNS over 53
+       Value = 192.0.2.33,
+     }],
+     Internal Domains = ["internal.corp.example"],
+     Search Domains = [
+       "internal.corp.example",
+       "corp.example",
+     ],
+   }
+
+                       Figure 7: Split Tunnel Example
+
+5.  Security Considerations
 
    Acting on received DNS_ASSIGN capsules can have significant impact on
    endpoint security.  Endpoints MUST ignore DNS_ASSIGN capsules unless
@@ -263,7 +356,7 @@ Table of Contents
    congestion control.  Implementations MUST place an upper bound on
    that buffering and abort the stream if that limit is reached.
 
-5.  IANA Considerations
+6.  IANA Considerations
 
    This document, if approved, will request IANA add the following
    values to the "HTTP Capsule Types" registry maintained at
@@ -272,9 +365,9 @@ Table of Contents
                        +============+==============+
                        | Value      | Capsule Type |
                        +============+==============+
-                       | 0x2B40144C | DNS_ASSIGN   |
+                       | 0x1460B736 | DNS_ASSIGN   |
                        +------------+--------------+
-                       | 0x2B40144D | DNS_REQUEST  |
+                       | 0x1460B737 | DNS_REQUEST  |
                        +------------+--------------+
 
                            Table 1: New Capsules
@@ -290,15 +383,33 @@ Table of Contents
    Contact:  masque@ietf.org
    Notes:  None
 
-6.  References
+7.  References
 
-6.1.  Normative References
+7.1.  Normative References
 
    [CONNECT-IP]
               Pauly, T., Ed., Schinazi, D., Chernyakhovsky, A.,
               Kühlewind, M., and M. Westerlund, "Proxying IP in HTTP",
               RFC 9484, DOI 10.17487/RFC9484, October 2023,
               <https://www.rfc-editor.org/rfc/rfc9484>.
+
+   [DNS]      Mockapetris, P., "Domain names - implementation and
+              specification", STD 13, RFC 1035, DOI 10.17487/RFC1035,
+              November 1987, <https://www.rfc-editor.org/rfc/rfc1035>.
+
+   [DoH]      Hoffman, P. and P. McManus, "DNS Queries over HTTPS
+              (DoH)", RFC 8484, DOI 10.17487/RFC8484, October 2018,
+              <https://www.rfc-editor.org/rfc/rfc8484>.
+
+   [DoQ]      Huitema, C., Dickinson, S., and A. Mankin, "DNS over
+              Dedicated QUIC Connections", RFC 9250,
+              DOI 10.17487/RFC9250, May 2022,
+              <https://www.rfc-editor.org/rfc/rfc9250>.
+
+   [DoT]      Hu, Z., Zhu, L., Heidemann, J., Mankin, A., Wessels, D.,
+              and P. Hoffman, "Specification for DNS over Transport
+              Layer Security (TLS)", RFC 7858, DOI 10.17487/RFC7858, May
+              2016, <https://www.rfc-editor.org/rfc/rfc7858>.
 
    [HTTP-DGRAM]
               Schinazi, D. and L. Pardue, "HTTP Datagrams and the
@@ -310,6 +421,11 @@ Table of Contents
               RFC 5890, DOI 10.17487/RFC5890, August 2010,
               <https://www.rfc-editor.org/rfc/rfc5890>.
 
+   [QUIC]     Iyengar, J., Ed. and M. Thomson, Ed., "QUIC: A UDP-Based
+              Multiplexed and Secure Transport", RFC 9000,
+              DOI 10.17487/RFC9000, May 2021,
+              <https://www.rfc-editor.org/rfc/rfc9000>.
+
    [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
               Requirement Levels", BCP 14, RFC 2119,
               DOI 10.17487/RFC2119, March 1997,
@@ -319,7 +435,12 @@ Table of Contents
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
               May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
 
-6.2.  Informative References
+   [URI]      Berners-Lee, T., Fielding, R., and L. Masinter, "Uniform
+              Resource Identifier (URI): Generic Syntax", STD 66,
+              RFC 3986, DOI 10.17487/RFC3986, January 2005,
+              <https://www.rfc-editor.org/rfc/rfc3986>.
+
+7.2.  Informative References
 
    [IKEv2]    Kaufman, C., Hoffman, P., Nir, Y., Eronen, P., and T.
               Kivinen, "Internet Key Exchange Protocol Version 2
