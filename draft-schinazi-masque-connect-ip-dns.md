@@ -1,5 +1,5 @@
 ---
-title: "DNS Extensions for Proxying IP in HTTP"
+title: "DNS Configuration for Proxying IP in HTTP"
 abbrev: "CONNECT-IP DNS"
 category: std
 docname: draft-schinazi-masque-connect-ip-dns-latest
@@ -47,9 +47,10 @@ informative:
 
 Proxying IP in HTTP allows building a VPN through HTTP load balancers. However,
 at the time of writing, that mechanism doesn't offer a mechanism for
-communicating DNS information inline. In contrast, most existing VPN protocols
-provide a mechanism to exchange DNS configuration information. This document
-describes an extension that exchanges this information using HTTP capsules.
+communicating DNS configuration information inline. In contrast, most existing
+VPN protocols provide a mechanism to exchange DNS configuration information.
+This document describes an extension that exchanges this information using HTTP
+capsules.
 
 --- middle
 
@@ -57,45 +58,80 @@ describes an extension that exchanges this information using HTTP capsules.
 
 Proxying IP in HTTP ({{!CONNECT-IP=RFC9484}}) allows building a VPN through
 HTTP load balancers. However, at the time of writing, that mechanism doesn't
-offer a mechanism for communicating DNS information inline. In contrast, most
-existing VPN protocols provide a mechanism to exchange DNS configuration
-information (e.g., {{?IKEv2=RFC7296}}). This document describes an extension
-that exchanges this information using HTTP capsules ({{!HTTP-DGRAM=RFC9297}}).
+offer a mechanism for communicating DNS configuration information inline. In
+contrast, most existing VPN protocols provide a mechanism to exchange DNS
+configuration information (e.g., {{?IKEv2=RFC7296}}). This document describes
+an extension that exchanges this information using HTTP capsules
+({{!HTTP-DGRAM=RFC9297}}). This document does not define any new ways to convey
+DNS queries or responses, only a mechanism to exchange DNS configuration
+information.
 
 ## Conventions and Definitions
 
 {::boilerplate bcp14-tagged}
 
+This document uses terminology from {{!QUIC=RFC9000}}. Where this document
+defines protocol types, the definition format uses the notation from {{Section
+1.3 of QUIC}}. This specification uses the variable-length integer encoding
+from {{Section 16 of !QUIC=RFC9000}}. Variable-length integer values do not
+need to be encoded in the minimum number of bytes necessary.
+
 # Mechanism
 
-Similar to how Proxying IP in HTTP exchanges IP addresses ({{Section 4.7 of
-CONNECT-IP}}), this mechanism leverages capsules to request configuration and
-to assign it. Similarly, this mechanism is bidirectional: either endpoint can
-request DNS configuration by sending a DNS_REQUEST capsule, and either endpoint
-can send DNS configuration in a DNS_ASSIGN capsule. These capsules follow the
+Similar to how Proxying IP in HTTP exchanges IP address configuration
+information ({{Section 4.7 of CONNECT-IP}}), this mechanism leverages capsules
+to request DNS configuration information and to assign it. Similarly, this
+mechanism is bidirectional: either endpoint can request DNS configuration
+information by sending a DNS_REQUEST capsule, and either endpoint can send DNS
+configuration information in a DNS_ASSIGN capsule. These capsules follow the
 format defined below.
 
 ~~~
-Nameserver Address {
-  IP Version (8),
-  IP Address (32..128),
+Nameserver {
+  Type (i),
+  Length (i),
+  Value (...),
 }
 ~~~
-{: #ns-addr-format title="Nameserver Address Format"}
+{: #ns-format title="Nameserver Format"}
 
-Each Nameserver Address contains the following fields:
+Each Nameserver structure contains the following fields:
 
-IP Version:
+Type:
 
-: IP Version of this nameserver address, encoded as an unsigned 8-bit integer.
-It MUST be either 4 or 6.
+: An integer representing the protocol over which DNS queries and responses are
+sent. See below for possible values. Encoded as a variable-length integer.
 
-IP Address:
+Length:
 
-: DNS nameserver IP address. If the IP Version field has value 4, the IP
-Address field SHALL have a length of 32 bits. If the IP Version field has value
-6, the IP Address field SHALL have a length of 128 bits.
+: The length of the following Value field, encoded as a variable-length integer.
 
+Value:
+
+: DNS name server configuration value, depends on the Type. This is commonly an
+IP address, but for other protocols it can also represent a URI template or a
+hostname.
+
+This document defines the following types:
+
+* DNS over port 53. Type = 0. DNS is sent unencrypted over UDP or TCP port 53,
+  as per {{!DNS=RFC1035}}. The Value is an IP address (either IPv4 or IPv6)
+  encoded in network byte order. Length SHALL be either 32 or 128 bits.
+
+* DNS over TLS. Type = 1. DNS is sent over TLS, as per {{!DoT=RFC7858}}. The
+  Value is a hostname, optionally followed by a colon and a port. The encoding
+  is the same as an authority without userinfo as defined in {{Section 3.2 of
+  !URI=RFC3986}}. It is encoded as ASCII, and not null-terminated. IPv4 and
+  IPv6 addresses can be encoded using this format, though IPv6 addresses need
+  to be enclosed in square brackets.
+
+* DNS over QUIC. Type = 2. DNS is sent over QUIC, as per {{!DoQ=RFC9250}}. The
+  Value is a hostname, encoded the same as for DNS over TLS.
+
+* DNS over HTTPS. Type = 3. DNS is sent over HTTPS, as per {{!DoH=RFC8484}}.
+  The Value is a URI Template. It is encoded as ASCII, and not null-terminated.
+
+* TODO: properly define an IANA registry with GREASE for future types.
 
 ~~~
 Domain {
@@ -120,8 +156,8 @@ Internationalized Domain Names for Applications (IDNA) A-label
 ~~~
 DNS Configuration {
   Request ID (i),
-  Nameserver Address Count (i),
-  Nameserver Address (..) ...,
+  Nameserver Count (i),
+  Nameserver (..) ...,
   Internal Domain Count (i),
   Internal Domain (..) ...,
   Search Domain Count (i),
@@ -141,14 +177,14 @@ response to a DNS configuration request then this field SHALL contain the value
 of the corresponding field in the request. If this DNS configuration is part of
 an unsolicited assignment, this field SHALL be zero.
 
-Nameserver Address Count:
+Nameserver Count:
 
-: The number of Nameserver Address structures following this field. Encoded as
+: The number of Nameserver structures following this field. Encoded as
 a variable-length integer.
 
-Nameserver Address:
+Nameserver:
 
-: A series of Nameserver Address structures representing DNS name servers.
+: A series of Nameserver structures representing DNS name servers.
 
 Internal Domain Count:
 
@@ -175,7 +211,7 @@ The DNS_REQUEST capsule (see {{iana}} for the value of the capsule type) allows
 an endpoint to request DNS configuration from its peer. The capsule allows the
 endpoint to optionally indicate a preference for which DNS configuration it
 would get assigned. The sender can indicate that it has no preference by not
-sending any addresses or names in its request DNS Configuration.
+sending any name servers or domain names in its request DNS Configuration.
 
 ~~~
 DNS_REQUEST Capsule {
@@ -188,6 +224,8 @@ DNS_REQUEST Capsule {
 
 When sending a DNS_REQUEST capsule, the sender MUST generate and send a new
 non-zero request ID that was not previously used on this IP Proxying stream.
+Note that this request ID namespace is distinct from the one used by
+ADDRESS_ASSIGN capsules (see {{Section 4.7.1 of CONNECT-IP}}).
 
 An endpoint that receives a DNS_REQUEST capsule SHALL reply by sending a
 DNS_ASSIGN capsule with the corresponding request ID. That DNS_ASSIGN capsule
@@ -217,13 +255,64 @@ to zero.
 
 Note that internal domains include subdomains. In other words, if the DNS
 configuration contains a domain, that indicates that the corresponding domain
-and all of its subdomains can be resolved by the nameservers exchanged in the
-same DNS configuration.
+and all of its subdomains can be resolved by the name servers exchanged in the
+same DNS configuration. Sending an empty string as an internal domain indicates
+the DNS root; i.e., that the corresponding name server can resolve all domain
+names.
 
-As with other IP Proxying capsules, the receiver can decide to whether to use
-or ignore the configuration information. For example, in the consumer VPN
+As with other IP Proxying capsules, the receiver can decide whether to use or
+ignore the configuration information. For example, in the consumer VPN
 scenario, clients will trust the server and apply received DNS configuration,
 whereas servers will ignore any DNS configuration sent by the client.
+
+If the IP proxy sends a DNS_ASSIGN capsule containing a DNS over HTTPS name
+server, then the client can validate whether the IP proxy is authoritative for
+the hostname in the URI template. If this validation succeeds, the client
+SHOULD send its DNS queries to that name server directly as independent HTTPS
+requests over the same HTTPS connection.
+
+# Examples
+
+## Full-Tunnel Consumer VPN
+
+A full-tunnel consumer VPN hosted at masque.example could configure the client
+to use DNS over HTTPS to the IP proxy itself by sending the following
+configuration.
+
+~~~
+DNS Configuration = {
+  Nameservers = [{
+    Type = 3,  // DNS over HTTPS
+    Value = "https://masque.example/dns-query{?dns}",
+  }],
+  Internal Domains = [""],
+  Search Domains = [],
+}
+~~~
+{: #ex-doh title="Full Tunnel Example"}
+
+## Split-Tunnel Enterprise VPN
+
+An enterprise switching their preexisting IPsec split-tunnel VPN could use the
+following configuration.
+
+~~~
+DNS Configuration = {
+  Nameservers = [{
+    Type = 0,  // DNS over 53
+    Value = 2001:db8::1,
+  }, {
+    Type = 0,  // DNS over 53
+    Value = 192.0.2.33,
+  }],
+  Internal Domains = ["internal.corp.example"],
+  Search Domains = [
+    "internal.corp.example",
+    "corp.example",
+  ],
+}
+~~~
+{: #ex-split title="Split Tunnel Example"}
 
 # Security Considerations
 
@@ -245,8 +334,8 @@ This document, if approved, will request IANA add the following values to the
 
 |   Value    | Capsule Type |
 |:-----------|:-------------|
-| 0x2B40144C |  DNS_ASSIGN  |
-| 0x2B40144D |  DNS_REQUEST |
+| 0x1460B736 |  DNS_ASSIGN  |
+| 0x1460B737 |  DNS_REQUEST |
 {: #iana-capsules-table title="New Capsules"}
 
 Note that, if this document is approved, the values defined above will be
