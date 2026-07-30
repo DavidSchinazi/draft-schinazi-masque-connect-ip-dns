@@ -5,8 +5,8 @@
 MASQUE                                                       D. Schinazi
 Internet-Draft                                                Google LLC
 Intended status: Standards Track                            Y. Rosomakho
-Expires: 17 April 2026                                           Zscaler
-                                                         14 October 2025
+Expires: 31 January 2027                                         Zscaler
+                                                            30 July 2026
 
 
           DNS and PREF64 Configuration for Proxying IP in HTTP
@@ -60,11 +60,11 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 17 April 2026.
+   This Internet-Draft will expire on 31 January 2027.
 
 Copyright Notice
 
-   Copyright (c) 2025 IETF Trust and the persons identified as the
+   Copyright (c) 2026 IETF Trust and the persons identified as the
    document authors.  All rights reserved.
 
    This document is subject to BCP 78 and the IETF Trust's Legal
@@ -382,9 +382,9 @@ Table of Contents
 4.1.  PREF64 Capsule
 
    Each PREF64 capsule conveys zero or more NAT64 prefixes.  If multiple
-   capsules are sent in the same direction, the most recent one replaces
-   any previously advertised prefixes.  Empty PREF64 capsule is used to
-   inform that NAT64 prefixes are not available.
+   capsules are sent in the same direction, the most recent one
+   supersedes any previously advertised prefixes.  Empty PREF64 capsule
+   is used to inform that NAT64 prefixes are not available.
 
    The capsule has the following structure (see Section 6 for the value
    of the capsule type):
@@ -423,7 +423,7 @@ Table of Contents
 
    Upon receiving a PREF64 capsule, a peer updates its local NAT64
    configuration for the corresponding CONNECT-IP session.  The newly
-   received PREF64 capsule overrides any previously received PREF64
+   received PREF64 capsule supersedes any previously received PREF64
    capsules in the same direction.
 
    If an endpoint receives a capsule that does not meet one of the
@@ -593,8 +593,8 @@ PREF64 Capsule {
 Acknowledgments
 
    The mechanism in this document was inspired by [IKEv2], [IKEv2-DNS],
-   and [IKEv2-SVCB].  The authors would like to thank Alex
-   Chernyakhovsky, Tommy Pauly, and other enthusiasts in the MASQUE
+   and [IKEv2-SVCB].  The authors would like to thank Alejandro Sedeño,
+   Alex Chernyakhovsky, Tommy Pauly, and other enthusiasts in the MASQUE
    Working Group for their contributions.
 
 Authors' Addresses
