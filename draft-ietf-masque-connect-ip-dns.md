@@ -369,7 +369,7 @@ construct IPv4-reachable addresses from IPv6 literals when a NAT64 translator is
 ## PREF64 Capsule {#pref64-capsule}
 
 Each PREF64 capsule conveys zero or more NAT64 prefixes. If multiple capsules are sent
-in the same direction, the most recent one replaces any previously advertised prefixes.
+in the same direction, the most recent one supersedes any previously advertised prefixes.
 Empty PREF64 capsule is used to inform that NAT64 prefixes are not available.
 
 The capsule has the following structure (see {{iana}} for the value of the capsule type):
@@ -410,7 +410,7 @@ preceding it, see {{Section 2.2 of !IPv6-TRANSLATOR}} for details.
 ## Handling
 
 Upon receiving a PREF64 capsule, a peer updates its local NAT64 configuration for the
-corresponding CONNECT-IP session. The newly received PREF64 capsule overrides any previously
+corresponding CONNECT-IP session. The newly received PREF64 capsule supersedes any previously
 received PREF64 capsules in the same direction.
 
 If an endpoint receives a capsule that does not meet one of the requirements listed in {{pref64-capsule}}, or
@@ -489,5 +489,5 @@ Notes:
 
 The mechanism in this document was inspired by {{IKEv2}},
 {{?IKEv2-DNS=RFC8598}}, and {{?IKEv2-SVCB=RFC9464}}. The authors would like to
-thank {{{Alex Chernyakhovsky}}}, {{{Tommy Pauly}}}, and other enthusiasts in
-the MASQUE Working Group for their contributions.
+thank {{{Alejandro Sedeño}}}, {{{Alex Chernyakhovsky}}}, {{{Tommy Pauly}}},
+and other enthusiasts in the MASQUE Working Group for their contributions.
